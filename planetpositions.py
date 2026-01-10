@@ -449,6 +449,17 @@ def main():
 
     # Precompute max radius and outer arc radius (used for zodiac arcs and boundary lines)
     max_radius = df[df['Planet'] != 'Sun']['r_plot'].max()
+    
+    # Calculate maximum orbital radius from orbital paths
+    max_orbital_radius = 0
+    for planet_name in df[df['Planet'] != 'Sun']['Planet'].unique():
+        planet_data = PLANETS_DATA.get(planet_name)
+        if planet_data:
+            a, e, L_deg, w_bar_deg = planet_data
+            # Maximum distance at aphelion
+            max_r_orbit = a * (1 + e)
+            max_orbital_radius = max(max_orbital_radius, max_r_orbit)
+    
     if use_log_radius:
         min_radius = df[df['Planet'] != 'Sun']['r_plot'].min()
         span = max_radius - min_radius if max_radius != min_radius else max_radius or 1
@@ -475,8 +486,9 @@ def main():
             radial_tickvals = []
             radial_ticktext = []
     else:
-        arc_radius = max_radius * 1.15
-        radial_tick_step = compute_radial_tick_step(max_radius)
+        # For linear scale, use the maximum orbital radius to position zodiac bands at perimeter
+        arc_radius = max_orbital_radius * 1.05
+        radial_tick_step = compute_radial_tick_step(max_orbital_radius)
         radial_tickvals = None
         radial_ticktext = None
 
@@ -655,25 +667,62 @@ def main():
                     )
                 )
         
-        # Add radial lines at zodiac boundaries so grid lines line up with sign transitions
-        for boundary_angle in [i * 30 for i in range(12)]:
+        # Add orbital paths for each planet
+        for planet_name in sorted(PLANETS_DATA.keys()):
+            # Only draw orbits for planets that are in the dataframe
+            if planet_name not in df['Planet'].values:
+                continue
+                
+            planet_data = PLANETS_DATA[planet_name]
+            a, e, L_deg, w_bar_deg = planet_data
+            # Generate points along the orbit
+            num_orbit_points = 200
+            nu_angles = np.linspace(0, 360, num_orbit_points)  # True anomaly angles
+            orbit_radii = []
+            orbit_theta = []  # Ecliptic longitude angles
+            
+            for nu_deg in nu_angles:
+                nu = np.radians(nu_deg)  # true anomaly
+                r = a * (1 - e**2) / (1 + e * np.cos(nu))
+                orbit_radii.append(r)
+                # The ecliptic longitude is the true anomaly rotated by w_bar (argument of perihelion)
+                theta = nu_deg + w_bar_deg
+                orbit_theta.append(theta)
+            
+            # Validate orbit data (check for NaN or invalid values)
+            if not all(np.isfinite(orbit_radii)):
+                continue
+            
+            # Apply log scaling if enabled
+            if use_log_radius:
+                planet_r_values = df[df['Planet'] != 'Sun']['r']
+                if len(planet_r_values) > 0:
+                    min_log = math.log10(planet_r_values.min())
+                    offset = abs(min_log) if min_log < 0 else 0
+                    orbit_radii_plot = [math.log10(max(r, 1e-6)) + offset for r in orbit_radii]
+                else:
+                    orbit_radii_plot = orbit_radii
+            else:
+                orbit_radii_plot = orbit_radii
+            
             fig.add_trace(
                 go.Scatterpolar(
-                    r=[0, arc_radius],
-                    theta=[boundary_angle, boundary_angle],
-                    mode='lines',
-                    line=dict(color='rgba(200, 200, 200, 0.4)', width=1),
-                    hoverinfo='skip',
-                    showlegend=False
+                    r=orbit_radii_plot,
+                    theta=orbit_theta,
+                        mode='lines',
+                        line=dict(color=planet_colors.get(planet_name, 'gray'), width=1, dash='dot'),
+                        hoverinfo='skip',
+                        showlegend=False,
+                        name=f'{planet_name} Orbit'
+                    )
                 )
-            )
 
         # Prepare radial axis config based on scale mode
         if use_log_radius:
             radialaxis_config = dict(
                 visible=True,
                 showticklabels=True,
-                gridcolor="gray",
+                showgrid=False,
                 type='linear',
                 range=[0, None],
                 tickmode='array',
@@ -684,7 +733,7 @@ def main():
             radialaxis_config = dict(
                 visible=True,
                 showticklabels=True,
-                gridcolor="gray",
+                showgrid=False,
                 type='linear',
                 range=[0, None],
                 dtick=radial_tick_step,
@@ -697,7 +746,7 @@ def main():
                 bgcolor="black",
                 radialaxis=radialaxis_config,
                 angularaxis=dict(
-                    gridcolor="gray",
+                    showgrid=False,
                     tickvals=[i * 30 + 15 for i in range(12)],
                     ticktext=zodiac_signs,
                     rotation=0,
