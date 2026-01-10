@@ -141,6 +141,18 @@ planet_diameters = {
     'Pluto': 2376
 }
 
+def compute_radial_tick_step(max_radius):
+    """Choose a radial tick step that keeps grid lines sparse."""
+    if max_radius <= 0:
+        return 1
+    rough_step = max_radius / 6
+    magnitude = 10 ** math.floor(math.log10(rough_step))
+    for factor in (1, 2, 5, 10):
+        step = factor * magnitude
+        if step >= rough_step:
+            return step
+    return magnitude * 10
+
 def calculate_birthday_facts(birth_datetime):
     """Calculate various birthday-related facts and statistics."""
     today_datetime = datetime.datetime.now()
@@ -391,7 +403,7 @@ def main():
     with col1:
         selected_date = st.date_input(
             "Select Date",
-            value=datetime.date.today(),
+            value=datetime.date(2000, 1, 1),
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date(2100, 12, 31)
         )
@@ -410,7 +422,7 @@ def main():
         
         show_perimeter = st.checkbox("Project to Perimeter (Angular Position Only)")
         use_glyphs = st.checkbox("Use Planet Glyphs")
-        use_log_radius = st.checkbox("Logarithmic Radial Scale")
+        use_log_radius = st.checkbox("Logarithmic Radial Scale", value=True)
         
     # 2. Calculate Data
     with st.spinner("Calculating planetary orbits..."):
@@ -441,11 +453,32 @@ def main():
         min_radius = df[df['Planet'] != 'Sun']['r_plot'].min()
         span = max_radius - min_radius if max_radius != min_radius else max_radius or 1
         arc_radius = max_radius + 0.1 * span
+        # Build AU-based tick labels mapped onto normalized log radii
+        planet_r_values_linear = df[df['Planet'] != 'Sun']['r_linear']
+        if len(planet_r_values_linear) > 0:
+            min_log = math.log10(max(planet_r_values_linear.min(), 1e-6))
+            offset = -min_log if min_log < 0 else 0
+            min_val = planet_r_values_linear.min()
+            max_val = planet_r_values_linear.max()
+            start_decade = int(math.floor(math.log10(max(min_val, 1e-6))))
+            end_decade = int(math.ceil(math.log10(max_val)))
+            candidates = []
+            for dec in range(start_decade, end_decade + 1):
+                for factor in (1, 2, 5):
+                    val = factor * (10 ** dec)
+                    if min_val * 0.9 <= val <= max_val * 1.1:
+                        candidates.append(val)
+            candidates = sorted(set(candidates))
+            radial_tickvals = [math.log10(v) + offset for v in candidates]
+            radial_ticktext = [f"{v:g} AU" for v in candidates]
+        else:
+            radial_tickvals = []
+            radial_ticktext = []
     else:
         arc_radius = max_radius * 1.15
-
-    # Calculate logarithmic sizes based on planetary diameters
-    df['Size'] = df['Diameter'].apply(lambda d: (math.log10(d) * 15 + 5) ** 1.5)
+        radial_tick_step = compute_radial_tick_step(max_radius)
+        radial_tickvals = None
+        radial_ticktext = None
 
     # Planet glyphs (astronomical symbols)
     planet_glyphs = {
@@ -549,17 +582,12 @@ def main():
                     )
                 )
         else:
-            # Create figure with custom marker sizes for better size differentiation
+            # Create figure with uniform marker sizes for simple colored dots
             fig = go.Figure()
             
-            # Add each planet individually with explicit marker size
+            # Add each planet individually with a uniform marker size so planets render as colored dots
             for _, row in df.iterrows():
-                # Calculate marker size based on diameter (more aggressive scaling)
-                if row['Planet'] == 'Sun':
-                    marker_size = 30
-                else:
-                    # Use log scale with more spread
-                    marker_size = max(5, min(40, math.log10(row['Diameter']) * 6))
+                marker_size = 12
                 
                 fig.add_trace(
                     go.Scatterpolar(
@@ -640,18 +668,34 @@ def main():
                 )
             )
 
+        # Prepare radial axis config based on scale mode
+        if use_log_radius:
+            radialaxis_config = dict(
+                visible=True,
+                showticklabels=True,
+                gridcolor="gray",
+                type='linear',
+                range=[0, None],
+                tickmode='array',
+                tickvals=radial_tickvals,
+                ticktext=radial_ticktext,
+            )
+        else:
+            radialaxis_config = dict(
+                visible=True,
+                showticklabels=True,
+                gridcolor="gray",
+                type='linear',
+                range=[0, None],
+                dtick=radial_tick_step,
+            )
+
         # Update layout for a dark space theme with zodiac labels
         # Position zodiac labels at the middle of each arc (15, 45, 75, etc.)
         fig.update_layout(
             polar=dict(
                 bgcolor="black",
-                radialaxis=dict(
-                    visible=True,
-                    showticklabels=True,
-                    gridcolor="gray",
-                    type='linear',
-                    range=[0, None]
-                ),
+                radialaxis=radialaxis_config,
                 angularaxis=dict(
                     gridcolor="gray",
                     tickvals=[i * 30 + 15 for i in range(12)],
