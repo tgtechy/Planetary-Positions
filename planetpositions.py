@@ -701,7 +701,7 @@ def main():
                     tickvals=[i * 30 + 15 for i in range(12)],
                     ticktext=zodiac_signs,
                     rotation=0,
-                    direction='clockwise'
+                    direction='counterclockwise'
                 )
             ),
             paper_bgcolor="black",
