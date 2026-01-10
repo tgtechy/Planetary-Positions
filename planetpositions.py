@@ -394,7 +394,7 @@ def int_to_base12(num):
 def main():
     st.title("🪐 Birthday Planetary Positions")
     st.markdown("""
-    Select a date below to see the heliocentric (Sun-centered) positions of the planets.
+    Select your birthday below to see the heliocentric (Sun-centered) positions of the planets.
     The distances are measured in **Astronomical Units (AU)**.
     """)
 
@@ -402,7 +402,7 @@ def main():
     col1, col2 = st.columns([1, 3])
     with col1:
         selected_date = st.date_input(
-            "Select Date",
+            "Select Birthday",
             value=datetime.date(2000, 1, 1),
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date(2100, 12, 31)
