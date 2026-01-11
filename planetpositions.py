@@ -428,30 +428,12 @@ def main():
     with st.spinner("Calculating planetary orbits..."):
         df = get_planet_positions(selected_datetime)
 
-    if show_perimeter:
-        # Set the radius of all planets (except Sun) to the maximum radius to form a circle
-        df.loc[df['Planet'] != 'Sun', 'r'] = df['r'].max()
-
     # Radial scaling (linear vs log); keep original AU values for hover
     df['r_linear'] = df['r']
-    if use_log_radius:
-        # Create r_plot with log scale for planets, but keep Sun at 0
-        # Shift log values to keep everything positive (offset by the minimum log value)
-        planet_r_values = df[df['Planet'] != 'Sun']['r']
-        if len(planet_r_values) > 0:
-            min_log = math.log10(planet_r_values.min())
-            offset = abs(min_log) if min_log < 0 else 0
-            df['r_plot'] = df.apply(lambda row: 0 if row['Planet'] == 'Sun' else math.log10(max(row['r'], 1e-6)) + offset, axis=1)
-        else:
-            df['r_plot'] = 0
-    else:
-        df['r_plot'] = df['r']
-
-    # Precompute max radius and outer arc radius (used for zodiac arcs and boundary lines)
-    max_radius = df[df['Planet'] != 'Sun']['r_plot'].max()
     
-    # Calculate maximum orbital radius from orbital paths
+    # Calculate maximum and minimum orbital radius from orbital paths (needed before perimeter projection)
     max_orbital_radius = 0
+    min_orbital_radius = float('inf')
     for planet_name in df[df['Planet'] != 'Sun']['Planet'].unique():
         planet_data = PLANETS_DATA.get(planet_name)
         if planet_data:
@@ -459,16 +441,48 @@ def main():
             # Maximum distance at aphelion
             max_r_orbit = a * (1 + e)
             max_orbital_radius = max(max_orbital_radius, max_r_orbit)
+            # Minimum distance at perihelion
+            min_r_orbit = a * (1 - e)
+            min_orbital_radius = min(min_orbital_radius, min_r_orbit)
     
+    if min_orbital_radius == float('inf'):
+        min_orbital_radius = 0.1
+    
+    # Apply radial scaling before perimeter projection
+    log_offset = 0  # Store offset for consistent use across log scaling
+    if use_log_radius:
+        # Create r_plot with log scale for planets, but keep Sun at 0
+        # Calculate offset based on minimum orbital radius to ensure all orbit points are positive after log transform
+        min_log = math.log10(min_orbital_radius)
+        log_offset = abs(min_log) if min_log < 0 else 0
+        df['r_plot'] = df.apply(lambda row: 0 if row['Planet'] == 'Sun' else math.log10(max(row['r'], 1e-6)) + log_offset, axis=1)
+    else:
+        df['r_plot'] = df['r']
+    
+    # Precompute max radius for arc sizing
+    max_radius = df[df['Planet'] != 'Sun']['r_plot'].max()
+    
+    # Calculate arc_radius based on scale mode
     if use_log_radius:
         min_radius = df[df['Planet'] != 'Sun']['r_plot'].min()
         span = max_radius - min_radius if max_radius != min_radius else max_radius or 1
         arc_radius = max_radius + 0.1 * span
-        # Build AU-based tick labels mapped onto normalized log radii
+    else:
+        # For linear scale, use the maximum orbital radius to position zodiac bands at perimeter
+        arc_radius = max_orbital_radius * 1.05
+
+    # Now apply perimeter projection after calculating arc_radius
+    if show_perimeter:
+        # Calculate arc_width to position planets beyond the zodiac band
+        arc_width = max_radius * 0.08 if max_radius > 0 else 0.5
+        # Position planets beyond the outer edge of the zodiac arcs
+        perimeter_radius = arc_radius + 0.05 * arc_width
+        df.loc[df['Planet'] != 'Sun', 'r_plot'] = perimeter_radius
+
+    # Build AU-based tick labels for log scale
+    if use_log_radius:
         planet_r_values_linear = df[df['Planet'] != 'Sun']['r_linear']
         if len(planet_r_values_linear) > 0:
-            min_log = math.log10(max(planet_r_values_linear.min(), 1e-6))
-            offset = -min_log if min_log < 0 else 0
             min_val = planet_r_values_linear.min()
             max_val = planet_r_values_linear.max()
             start_decade = int(math.floor(math.log10(max(min_val, 1e-6))))
@@ -480,17 +494,16 @@ def main():
                     if min_val * 0.9 <= val <= max_val * 1.1:
                         candidates.append(val)
             candidates = sorted(set(candidates))
-            radial_tickvals = [math.log10(v) + offset for v in candidates]
+            radial_tickvals = [math.log10(v) + log_offset for v in candidates]
             radial_ticktext = [f"{v:g} AU" for v in candidates]
         else:
             radial_tickvals = []
             radial_ticktext = []
+        radial_tick_step = None
     else:
-        # For linear scale, use the maximum orbital radius to position zodiac bands at perimeter
-        arc_radius = max_orbital_radius * 1.05
-        radial_tick_step = compute_radial_tick_step(max_orbital_radius)
         radial_tickvals = None
         radial_ticktext = None
+        radial_tick_step = compute_radial_tick_step(max_orbital_radius)
 
     # Planet glyphs (astronomical symbols)
     planet_glyphs = {
@@ -577,6 +590,8 @@ def main():
             color_map = {planet: planet_colors.get(planet, 'gray') for planet in df['Planet'].unique()}
             
             for _, row in df.iterrows():
+                # Make Sun smaller than other planets
+                text_size = 12 if row['Planet'] == 'Sun' else 24
                 fig.add_trace(
                     go.Scatterpolar(
                         r=[row['r_plot']],
@@ -584,7 +599,7 @@ def main():
                         mode='text+markers',
                         text=[planet_glyphs.get(row['Planet'], '●')],
                         textposition='middle center',
-                        textfont=dict(size=24, color=color_map[row['Planet']]),
+                        textfont=dict(size=text_size, color=color_map[row['Planet']]),
                         marker=dict(size=0),
                         meta=[row['Planet'], row['r_linear']],
                         hovertemplate='<b>%{meta[0]}</b><br>r: %{meta[1]:.3f} AU<extra></extra>',
@@ -599,7 +614,8 @@ def main():
             
             # Add each planet individually with a uniform marker size so planets render as colored dots
             for _, row in df.iterrows():
-                marker_size = 12
+                # Make Sun smaller than other planets
+                marker_size = 6 if row['Planet'] == 'Sun' else 12
                 
                 fig.add_trace(
                     go.Scatterpolar(
@@ -667,48 +683,43 @@ def main():
                     )
                 )
         
-        # Add orbital paths for each planet
-        for planet_name in sorted(PLANETS_DATA.keys()):
-            # Only draw orbits for planets that are in the dataframe
-            if planet_name not in df['Planet'].values:
-                continue
+        # Add orbital paths for each planet (skip if projecting to perimeter)
+        if not show_perimeter:
+            for planet_name in sorted(PLANETS_DATA.keys()):
+                # Only draw orbits for planets that are in the dataframe
+                if planet_name not in df['Planet'].values:
+                    continue
+                    
+                planet_data = PLANETS_DATA[planet_name]
+                a, e, L_deg, w_bar_deg = planet_data
+                # Generate points along the orbit
+                num_orbit_points = 200
+                nu_angles = np.linspace(0, 360, num_orbit_points)  # True anomaly angles
+                orbit_radii = []
+                orbit_theta = []  # Ecliptic longitude angles
                 
-            planet_data = PLANETS_DATA[planet_name]
-            a, e, L_deg, w_bar_deg = planet_data
-            # Generate points along the orbit
-            num_orbit_points = 200
-            nu_angles = np.linspace(0, 360, num_orbit_points)  # True anomaly angles
-            orbit_radii = []
-            orbit_theta = []  # Ecliptic longitude angles
-            
-            for nu_deg in nu_angles:
-                nu = np.radians(nu_deg)  # true anomaly
-                r = a * (1 - e**2) / (1 + e * np.cos(nu))
-                orbit_radii.append(r)
-                # The ecliptic longitude is the true anomaly rotated by w_bar (argument of perihelion)
-                theta = nu_deg + w_bar_deg
-                orbit_theta.append(theta)
-            
-            # Validate orbit data (check for NaN or invalid values)
-            if not all(np.isfinite(orbit_radii)):
-                continue
-            
-            # Apply log scaling if enabled
-            if use_log_radius:
-                planet_r_values = df[df['Planet'] != 'Sun']['r']
-                if len(planet_r_values) > 0:
-                    min_log = math.log10(planet_r_values.min())
-                    offset = abs(min_log) if min_log < 0 else 0
-                    orbit_radii_plot = [math.log10(max(r, 1e-6)) + offset for r in orbit_radii]
+                for nu_deg in nu_angles:
+                    nu = np.radians(nu_deg)  # true anomaly
+                    r = a * (1 - e**2) / (1 + e * np.cos(nu))
+                    orbit_radii.append(r)
+                    # The ecliptic longitude is the true anomaly rotated by w_bar (argument of perihelion)
+                    theta = nu_deg + w_bar_deg
+                    orbit_theta.append(theta)
+                
+                # Validate orbit data (check for NaN or invalid values)
+                if not all(np.isfinite(orbit_radii)):
+                    continue
+                
+                # Apply log scaling if enabled to match planet visualization
+                if use_log_radius:
+                    orbit_radii_plot = [math.log10(max(r, 1e-6)) + log_offset for r in orbit_radii]
                 else:
                     orbit_radii_plot = orbit_radii
-            else:
-                orbit_radii_plot = orbit_radii
-            
-            fig.add_trace(
-                go.Scatterpolar(
-                    r=orbit_radii_plot,
-                    theta=orbit_theta,
+                
+                fig.add_trace(
+                    go.Scatterpolar(
+                        r=orbit_radii_plot,
+                        theta=orbit_theta,
                         mode='lines',
                         line=dict(color=planet_colors.get(planet_name, 'gray'), width=1, dash='dot'),
                         hoverinfo='skip',
@@ -718,7 +729,13 @@ def main():
                 )
 
         # Prepare radial axis config based on scale mode
-        if use_log_radius:
+        if show_perimeter:
+            # Hide radial axis when projecting to perimeter
+            radialaxis_config = dict(
+                visible=False,
+                showticklabels=False,
+            )
+        elif use_log_radius:
             radialaxis_config = dict(
                 visible=True,
                 showticklabels=True,
