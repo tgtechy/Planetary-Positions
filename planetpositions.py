@@ -512,10 +512,8 @@ def main():
 
     # Now apply perimeter projection after calculating arc_radius
     if show_perimeter:
-        # Calculate arc_width to position planets beyond the zodiac band
-        arc_width = max_radius * 0.08 if max_radius > 0 else 0.5
-        # Position planets beyond the outer edge of the zodiac arcs
-        perimeter_radius = arc_radius + 0.05 * arc_width
+        # Position planets closer to the perimeter when projecting to perimeter
+        perimeter_radius = arc_radius * 0.80  # Move planets to 80% of arc_radius distance from center
         df.loc[df['Planet'] != 'Sun', 'r_plot'] = perimeter_radius
 
     # Build AU-based tick labels for log scale
@@ -659,7 +657,7 @@ def main():
                 if image_path:
                     # Determine image size based on planet (larger sizes for better visibility)
                     if planet_name == 'Sun':
-                        sizex = sizey = arc_radius * 0.30
+                        sizex = sizey = arc_radius * 0.15
                     elif planet_name in ['Jupiter', 'Saturn']:
                         sizex = sizey = arc_radius * 0.24
                     elif planet_name in ['Uranus', 'Neptune']:
@@ -721,6 +719,7 @@ def main():
             # Update layout for Cartesian plot
             max_extent_layout = arc_radius * 1.6
             fig.update_layout(
+                template='plotly_dark',  # Dark theme
                 xaxis=dict(
                     range=[-max_extent_layout, max_extent_layout],
                     showgrid=False,
@@ -744,6 +743,12 @@ def main():
                     showline=False,
                     ticks='',
                     showspikes=False
+                ),
+                # CRITICAL: Override polar configuration to prevent any polar axes from appearing
+                polar=dict(
+                    bgcolor='rgba(0,0,0,0)',
+                    radialaxis=dict(visible=False, showline=False, showgrid=False),
+                    angularaxis=dict(visible=False, showline=False, showgrid=False)
                 ),
                 paper_bgcolor="black",
                 plot_bgcolor="black",
@@ -923,8 +928,8 @@ def main():
                     )
                 )
         
-        # Add orbital paths for each planet (skip if projecting to perimeter)
-        if not show_perimeter:
+        # Add orbital paths for each planet (skip if projecting to perimeter or using images)
+        if not show_perimeter and not use_planet_images:
             for planet_name in sorted(PLANETS_DATA.keys()):
                 # Only draw orbits for planets that are in the dataframe
                 if planet_name not in df['Planet'].values:
