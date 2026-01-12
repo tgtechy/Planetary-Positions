@@ -141,6 +141,8 @@ planet_diameters = {
     'Pluto': 2376
 }
 
+
+
 def compute_radial_tick_step(max_radius):
     """Choose a radial tick step that keeps grid lines sparse."""
     if max_radius <= 0:
@@ -391,11 +393,39 @@ def int_to_base12(num):
         num //= 12
     return result
 
+def load_planet_image(planet_name):
+    """Load a planet image file from the planet_images folder if it exists."""
+    import os
+    # Try PNG first, then GIF as fallback (use lowercase filenames)
+    planet_name_lower = planet_name.lower()
+    for ext in ['.png', '.gif']:
+        image_path = f"planet_images/{planet_name_lower}{ext}"
+        if os.path.exists(image_path):
+            return image_path
+    return None
+
+def image_to_base64(image_path):
+    """Convert image to base64 for embedding in Plotly."""
+    import base64
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+def polar_to_cartesian(r, theta_deg):
+    """Convert polar coordinates to Cartesian coordinates."""
+    import math
+    theta_rad = math.radians(theta_deg)
+    x = r * math.cos(theta_rad)
+    y = r * math.sin(theta_rad)
+    return x, y
+
 def main():
     st.title("🪐 Birthday Planetary Positions")
     st.markdown("""
     Select your birthday below to see the heliocentric (Sun-centered) positions of the planets.
     The distances are measured in **Astronomical Units (AU)**.
+    
+    **Note on Planet Images:** To display custom planet images, place PNG or GIF files in a `planet_images/` folder
+    in the same directory as this script. Name files as: `mercury.png`, `venus.png`, etc.
     """)
 
     # 1. User Input
@@ -421,7 +451,16 @@ def main():
         selected_datetime = datetime.datetime(selected_date.year, selected_date.month, selected_date.day, hour, minute, second)
         
         show_perimeter = st.checkbox("Project to Perimeter (Angular Position Only)")
-        use_glyphs = st.checkbox("Use Planet Glyphs")
+        
+        # Planet visualization mode (mutually exclusive)
+        planet_mode = st.radio(
+            "Planet Display Mode",
+            ["Markers", "Glyphs", "Images"],
+            horizontal=True
+        )
+        use_glyphs = (planet_mode == "Glyphs")
+        use_planet_images = (planet_mode == "Images")
+        
         use_log_radius = st.checkbox("Logarithmic Radial Scale", value=True)
         
     # 2. Calculate Data
@@ -536,7 +575,208 @@ def main():
     # 3. Visualization
     with col2:
         # Create Polar Scatter Plot
-        if use_glyphs:
+        if use_planet_images:
+            # Use Cartesian plot for better image placement
+            fig = go.Figure(layout=go.Layout(template='plotly_dark'))
+            
+            # Convert all polar data to Cartesian
+            df['x_cart'] = df.apply(lambda row: polar_to_cartesian(row['r_plot'], row['theta'])[0], axis=1)
+            df['y_cart'] = df.apply(lambda row: polar_to_cartesian(row['r_plot'], row['theta'])[1], axis=1)
+            
+            # Draw zodiac boundary circles and labels in Cartesian
+            zodiac_signs = [
+                "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+            ]
+            colors = [
+                'rgba(255, 80, 80, 0.7)', 'rgba(255, 140, 60, 0.7)', 'rgba(255, 200, 50, 0.7)',
+                'rgba(100, 220, 100, 0.7)', 'rgba(80, 200, 200, 0.7)', 'rgba(100, 150, 255, 0.7)',
+                'rgba(180, 100, 220, 0.7)', 'rgba(220, 100, 180, 0.7)', 'rgba(255, 120, 100, 0.7)',
+                'rgba(255, 180, 80, 0.7)', 'rgba(150, 220, 150, 0.7)', 'rgba(120, 180, 255, 0.7)'
+            ]
+            
+            # Draw zodiac arcs as filled wedges in Cartesian coordinates
+            arc_width = max_radius * 0.08 if max_radius > 0 else 0.5
+            arc_inner = arc_radius - arc_width
+            
+            # Add large black background circle first
+            circle_angles = np.linspace(0, 360, 100)
+            bg_radius = arc_radius * 1.5
+            x_bg = [bg_radius * np.cos(np.radians(a)) for a in circle_angles]
+            y_bg = [bg_radius * np.sin(np.radians(a)) for a in circle_angles]
+            fig.add_trace(
+                go.Scatter(
+                    x=x_bg,
+                    y=y_bg,
+                    fill='toself',
+                    fillcolor='black',
+                    line=dict(width=0),
+                    hoverinfo='skip',
+                    showlegend=False,
+                    mode='lines'
+                )
+            )
+            
+            for i in range(12):
+                angle_start = i * 30
+                angle_end = (i + 1) * 30
+                
+                # Create arc points in Cartesian
+                num_points = 50
+                angles = np.linspace(angle_start, angle_end, num_points)
+                
+                # Outer arc
+                x_outer = [arc_radius * np.cos(np.radians(a)) for a in angles]
+                y_outer = [arc_radius * np.sin(np.radians(a)) for a in angles]
+                
+                # Inner arc (reversed)
+                x_inner = [arc_inner * np.cos(np.radians(a)) for a in reversed(angles)]
+                y_inner = [arc_inner * np.sin(np.radians(a)) for a in reversed(angles)]
+                
+                # Combine for closed shape
+                x_all = x_outer + x_inner
+                y_all = y_outer + y_inner
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_all,
+                        y=y_all,
+                        fill='toself',
+                        fillcolor=colors[i],
+                        line=dict(color='rgba(150, 150, 150, 0.5)', width=1),
+                        hoverinfo='skip',
+                        showlegend=False,
+                        mode='lines'
+                    )
+                )
+            
+            # Add planets with images
+            layout_images = []
+            for _, row in df.iterrows():
+                planet_name = row['Planet']
+                image_path = load_planet_image(planet_name)
+                
+                if image_path:
+                    # Determine image size based on planet (larger sizes for better visibility)
+                    if planet_name == 'Sun':
+                        sizex = sizey = arc_radius * 0.30
+                    elif planet_name in ['Jupiter', 'Saturn']:
+                        sizex = sizey = arc_radius * 0.24
+                    elif planet_name in ['Uranus', 'Neptune']:
+                        sizex = sizey = arc_radius * 0.20
+                    elif planet_name == 'Pluto':
+                        sizex = sizey = arc_radius * 0.12
+                    else:  # Mercury, Venus, Earth, Mars
+                        sizex = sizey = arc_radius * 0.16
+                    
+                    # Convert image to base64
+                    img_b64 = image_to_base64(image_path)
+                    
+                    layout_images.append(
+                        dict(
+                            source=f"data:image/png;base64,{img_b64}",
+                            xref="x",
+                            yref="y",
+                            x=row['x_cart'],
+                            y=row['y_cart'],
+                            sizex=sizex,
+                            sizey=sizey,
+                            sizing="contain",
+                            xanchor="center",
+                            yanchor="middle",
+                            layer="above"
+                        )
+                    )
+                    
+                    # Add invisible marker for hover and legend
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[row['x_cart']],
+                            y=[row['y_cart']],
+                            mode='markers',
+                            marker=dict(size=0.1, color='rgba(0,0,0,0)'),
+                            name=planet_name,
+                            hovertemplate=f"<b>{planet_name}</b><br>r: {row['r_linear']:.3f} AU<br>Diameter: {row['Diameter']:,} km<extra></extra>",
+                            showlegend=True
+                        )
+                    )
+            
+            # Add zodiac sign labels outside the colored bands
+            label_radius = arc_radius * 1.25
+            for i, sign in enumerate(zodiac_signs):
+                angle = i * 30 + 15
+                x_label = label_radius * np.cos(np.radians(angle))
+                y_label = label_radius * np.sin(np.radians(angle))
+                
+                fig.add_annotation(
+                    x=x_label,
+                    y=y_label,
+                    text=sign,
+                    showarrow=False,
+                    font=dict(color='white', size=12, family='Arial'),
+                    xanchor='center',
+                    yanchor='middle'
+                )
+            
+            # Update layout for Cartesian plot
+            max_extent_layout = arc_radius * 1.6
+            fig.update_layout(
+                xaxis=dict(
+                    range=[-max_extent_layout, max_extent_layout],
+                    showgrid=False,
+                    showticklabels=False,
+                    zeroline=False,
+                    visible=False,
+                    scaleanchor="y",
+                    scaleratio=1,
+                    fixedrange=True,
+                    showline=False,
+                    ticks='',
+                    showspikes=False
+                ),
+                yaxis=dict(
+                    range=[-max_extent_layout, max_extent_layout],
+                    showgrid=False,
+                    showticklabels=False,
+                    zeroline=False,
+                    visible=False,
+                    fixedrange=True,
+                    showline=False,
+                    ticks='',
+                    showspikes=False
+                ),
+                paper_bgcolor="black",
+                plot_bgcolor="black",
+                font=dict(color="white"),
+                margin=dict(l=20, r=20, b=40, t=40),
+                images=layout_images,
+                showlegend=not show_perimeter,  # Hide legend when projecting to perimeter
+                hovermode='closest',
+                dragmode=False
+            )
+            
+            # Force all axes to be completely hidden
+            fig.update_xaxes(
+                showgrid=False, 
+                zeroline=False, 
+                visible=False, 
+                showline=False,
+                showticklabels=False,
+                ticks='',
+                showspikes=False,
+                mirror=False
+            )
+            fig.update_yaxes(
+                showgrid=False, 
+                zeroline=False, 
+                visible=False, 
+                showline=False,
+                showticklabels=False,
+                ticks='',
+                showspikes=False,
+                mirror=False
+            )
+        elif use_glyphs:
             # Add custom text labels for planet glyphs
             fig = go.Figure()
             
@@ -692,8 +932,8 @@ def main():
                     
                 planet_data = PLANETS_DATA[planet_name]
                 a, e, L_deg, w_bar_deg = planet_data
-                # Generate points along the orbit
-                num_orbit_points = 200
+                # Generate points along the orbit with high accuracy
+                num_orbit_points = 1000
                 nu_angles = np.linspace(0, 360, num_orbit_points)  # True anomaly angles
                 orbit_radii = []
                 orbit_theta = []  # Ecliptic longitude angles
@@ -710,7 +950,7 @@ def main():
                 if not all(np.isfinite(orbit_radii)):
                     continue
                 
-                # Apply log scaling if enabled to match planet visualization
+                # Apply log scaling if enabled to match planet visualization scale
                 if use_log_radius:
                     orbit_radii_plot = [math.log10(max(r, 1e-6)) + log_offset for r in orbit_radii]
                 else:
@@ -728,55 +968,74 @@ def main():
                     )
                 )
 
-        # Prepare radial axis config based on scale mode
-        if show_perimeter:
-            # Hide radial axis when projecting to perimeter
-            radialaxis_config = dict(
-                visible=False,
-                showticklabels=False,
-            )
-        elif use_log_radius:
-            radialaxis_config = dict(
-                visible=True,
-                showticklabels=True,
-                showgrid=False,
-                type='linear',
-                range=[0, None],
-                tickmode='array',
-                tickvals=radial_tickvals,
-                ticktext=radial_ticktext,
-            )
-        else:
-            radialaxis_config = dict(
-                visible=True,
-                showticklabels=True,
-                showgrid=False,
-                type='linear',
-                range=[0, None],
-                dtick=radial_tick_step,
-            )
-
-        # Update layout for a dark space theme with zodiac labels
-        # Position zodiac labels at the middle of each arc (15, 45, 75, etc.)
-        fig.update_layout(
-            polar=dict(
-                bgcolor="black",
-                radialaxis=radialaxis_config,
-                angularaxis=dict(
-                    showgrid=False,
-                    tickvals=[i * 30 + 15 for i in range(12)],
-                    ticktext=zodiac_signs,
-                    rotation=0,
-                    direction='counterclockwise'
+        # Prepare radial axis config based on scale mode (only for polar plots)
+        if not use_planet_images:
+            if show_perimeter:
+                # Hide radial axis when projecting to perimeter
+                radialaxis_config = dict(
+                    visible=False,
+                    showticklabels=False,
                 )
-            ),
-            paper_bgcolor="black",
-            plot_bgcolor="black",
-            font=dict(color="white"),
-            margin=dict(l=0, r=0, b=80, t=40)
-        )
+            elif use_log_radius:
+                radialaxis_config = dict(
+                    visible=True,
+                    showticklabels=True,
+                    showgrid=False,
+                    type='linear',
+                    range=[0, None],
+                    tickmode='array',
+                    tickvals=radial_tickvals,
+                    ticktext=radial_ticktext,
+                )
+            else:
+                radialaxis_config = dict(
+                    visible=True,
+                    showticklabels=True,
+                    showgrid=False,
+                    type='linear',
+                    range=[0, None],
+                    dtick=radial_tick_step,
+                )
 
-        st.plotly_chart(fig, use_container_width=True)
+            # Update layout for a dark space theme with zodiac labels (polar plot)
+            # Position zodiac labels at the middle of each arc (15, 45, 75, etc.)
+            fig.update_layout(
+                polar=dict(
+                    bgcolor="black",
+                    radialaxis=radialaxis_config,
+                    angularaxis=dict(
+                        showgrid=False,
+                        tickvals=[i * 30 + 15 for i in range(12)],
+                        ticktext=zodiac_signs,
+                        rotation=0,
+                        direction='counterclockwise'
+                    )
+                ),
+                paper_bgcolor="black",
+                plot_bgcolor="black",
+                font=dict(color="white"),
+                margin=dict(l=0, r=0, b=80, t=40)
+            )
+
+        # Use theme=None when using planet images to prevent Streamlit from overriding Plotly's dark theme
+        if use_planet_images:
+            st.plotly_chart(fig, use_container_width=True, theme=None)
+        else:
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Display planet images if using images mode
+        if use_planet_images:
+            st.markdown("### Planet Image Gallery")
+            image_cols = st.columns(3)
+            col_idx = 0
+            for _, row in df.iterrows():
+                planet_name = row['Planet']
+                image_path = load_planet_image(planet_name)
+                if image_path:
+                    with image_cols[col_idx % 3]:
+                        st.markdown(f"**{planet_name}**")
+                        st.image(image_path)
+                        col_idx += 1
 
     # Birthday Facts Section
     st.markdown("---")
