@@ -422,11 +422,7 @@ def main():
     st.title("🪐 Birthday Planetary Positions")
     st.markdown("""
     Select your birthday below to see the heliocentric (Sun-centered) positions of the planets.
-    The distances are measured in **Astronomical Units (AU)**.
-    
-    **Note on Planet Images:** To display custom planet images, place PNG or GIF files in a `planet_images/` folder
-    in the same directory as this script. Name files as: `mercury.png`, `venus.png`, etc.
-    """)
+    The distances are measured in **Astronomical Units (AU)**.""")
 
     # 1. User Input
     col1, col2 = st.columns([1, 3])
