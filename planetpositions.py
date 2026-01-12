@@ -446,7 +446,7 @@ def main():
         
         selected_datetime = datetime.datetime(selected_date.year, selected_date.month, selected_date.day, hour, minute, second)
         
-        show_perimeter = st.checkbox("Project to Perimeter (Angular Position Only)")
+        show_perimeter = st.checkbox("Project to Perimeter (Angular Position Only)", key="show_perimeter")
         
         # Planet visualization mode (mutually exclusive)
         planet_mode = st.radio(
@@ -457,7 +457,24 @@ def main():
         use_glyphs = (planet_mode == "Glyphs")
         use_planet_images = (planet_mode == "Images")
         
-        use_log_radius = st.checkbox("Logarithmic Radial Scale", value=True)
+        # Disable logarithmic scale when projecting to perimeter
+        if show_perimeter:
+            # Force off if previously enabled
+            if "use_log_radius" in st.session_state and st.session_state.get("use_log_radius"):
+                st.session_state["use_log_radius"] = False
+            use_log_radius = st.checkbox(
+                "Logarithmic Radial Scale",
+                value=False,
+                disabled=True,
+                help="Disabled when 'Project to Perimeter' is selected",
+                key="use_log_radius",
+            )
+        else:
+            use_log_radius = st.checkbox(
+                "Logarithmic Radial Scale",
+                value=True,
+                key="use_log_radius",
+            )
         
     # 2. Calculate Data
     with st.spinner("Calculating planetary orbits..."):
@@ -611,6 +628,8 @@ def main():
                 )
             )
             
+            # Draw zodiac wedge bands in images mode (single band),
+            # polar arcs are disabled elsewhere to avoid duplicates
             for i in range(12):
                 angle_start = i * 30
                 angle_end = (i + 1) * 30
@@ -833,22 +852,47 @@ def main():
             for _, row in df.iterrows():
                 # Make Sun smaller than other planets
                 text_size = 12 if row['Planet'] == 'Sun' else 24
+                glyph_symbol = planet_glyphs.get(row['Planet'], '●')
                 fig.add_trace(
                     go.Scatterpolar(
                         r=[row['r_plot']],
                         theta=[row['theta']],
-                        mode='text+markers',
-                        text=[planet_glyphs.get(row['Planet'], '●')],
+                        mode='text',
+                        text=[glyph_symbol],
                         textposition='middle center',
                         textfont=dict(size=text_size, color=color_map[row['Planet']]),
-                        marker=dict(size=0),
                         meta=[row['Planet'], row['r_linear']],
                         hovertemplate='<b>%{meta[0]}</b><br>r: %{meta[1]:.3f} AU<extra></extra>',
-                        showlegend=True,
-                        name=row['Planet'],
+                        showlegend=False,
+                        name=f"{glyph_symbol} - {row['Planet']}",
                         legendgroup=row['Planet']
                     )
                 )
+
+            # Legend-only traces to display glyph + planet without the default text icon
+            # Use classical planetary order
+            planet_order = ['Sun', 'Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']
+            legend_planets = [p for p in planet_order if p in df['Planet'].values]
+            for planet_name in legend_planets:
+                glyph_symbol = planet_glyphs.get(planet_name, '●')
+                glyph_color = planet_colors.get(planet_name, 'white')
+                fig.add_trace(
+                    go.Scatterpolar(
+                        r=[None],
+                        theta=[None],
+                        mode='markers',
+                        marker=dict(size=0, color='rgba(0,0,0,0)'),
+                        showlegend=True,
+                        # Color the glyph text via HTML span to match plot colors
+                        name=f"<span style='color:{glyph_color}'>{glyph_symbol}</span> - {planet_name}",
+                        legendgroup=planet_name,
+                        hoverinfo='skip',
+                        visible=True
+                    )
+                )
+
+            # Make legend glyphs larger for readability (fallback for label text)
+            fig.update_layout(legend=dict(font=dict(size=14), yanchor="top", y=0.99, xanchor="right", x=0.99))
         else:
             # Create figure with uniform marker sizes for simple colored dots
             fig = go.Figure()
@@ -865,7 +909,8 @@ def main():
                         mode='markers',
                         marker=dict(
                             size=marker_size,
-                            color=planet_colors.get(row['Planet'], 'gray')
+                            color=planet_colors.get(row['Planet'], 'gray'),
+                            line=dict(color='black', width=2)
                         ),
                         name=row['Planet'],
                         hovertemplate=f"<b>{row['Planet']}</b><br>r: {row['r_linear']:.3f} AU<br>Diameter: {row['Diameter']:,} km<extra></extra>",
@@ -879,7 +924,8 @@ def main():
             "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
         ]
         
-        if not use_glyphs:
+        # Only add polar zodiac arcs for markers mode (not images)
+        if not use_glyphs and not use_planet_images:
             # Use the shared arc radius to keep visuals aligned with glyph mode
             # Add zodiac sign arc regions and boundary lines with vibrant colors
             colors = [
@@ -1015,7 +1061,8 @@ def main():
                 paper_bgcolor="black",
                 plot_bgcolor="black",
                 font=dict(color="white"),
-                margin=dict(l=0, r=0, b=80, t=40)
+                margin=dict(l=0, r=0, b=80, t=40),
+                legend=dict(font=dict(size=14), yanchor="top", y=0.99, xanchor="right", x=0.99, tracegroupgap=12)
             )
 
         # Use theme=None when using planet images to prevent Streamlit from overriding Plotly's dark theme
@@ -1023,6 +1070,89 @@ def main():
             st.plotly_chart(fig, use_container_width=True, theme=None)
         else:
             st.plotly_chart(fig, use_container_width=True)
+        
+        # Export controls and download button for high-resolution PNG
+        # These settings only affect the downloaded image, not the on-screen plot
+        exp_col1, exp_col2, exp_col3 = st.columns(3)
+        with exp_col1:
+            export_scale = st.slider("PNG export scale", min_value=1, max_value=4, value=3, help="Higher scale increases resolution.")
+            export_font_size = st.slider("PNG export font size", min_value=12, max_value=36, value=20, help="Larger values make text more readable in the PNG.")
+        with exp_col2:
+            export_width = st.number_input("PNG export width (px)", min_value=800, max_value=4000, value=1400, step=100, help="Width of the exported PNG.")
+            export_height = st.number_input("PNG export height (px)", min_value=600, max_value=3000, value=1000, step=100, help="Height of the exported PNG.")
+        with exp_col3:
+            export_bg = st.selectbox(
+                "PNG background",
+                ["Match app (black)", "Transparent", "White"],
+                index=0,
+                help="Choose background for the exported image."
+            )
+
+        try:
+            # Create an export-only copy of the figure and enlarge fonts
+            fig_export = go.Figure(fig)
+
+            # Apply background choice to export only
+            if export_bg == "Transparent":
+                bg_color = "rgba(0,0,0,0)"
+            elif export_bg == "White":
+                bg_color = "white"
+            else:
+                bg_color = "black"
+
+            fig_export.update_layout(
+                paper_bgcolor=bg_color,
+                plot_bgcolor=bg_color,
+            )
+            if getattr(fig_export.layout, "polar", None):
+                fig_export.update_layout(polar=dict(bgcolor=bg_color))
+
+            # Base font and legend
+            fig_export.update_layout(font=dict(size=export_font_size))
+            fig_export.update_layout(legend=dict(font=dict(size=export_font_size)))
+
+            # Title font (if present)
+            if fig_export.layout.title and fig_export.layout.title.font:
+                current = fig_export.layout.title.font.size or 0
+                fig_export.layout.title.font.size = max(current, export_font_size)
+
+            # Polar axis tick fonts (if polar is used)
+            if getattr(fig_export.layout, "polar", None):
+                fig_export.update_layout(
+                    polar=dict(
+                        angularaxis=dict(tickfont=dict(size=export_font_size)),
+                        radialaxis=dict(tickfont=dict(size=export_font_size))
+                    )
+                )
+
+            # Cartesian axes fonts (safe even if axes are hidden)
+            fig_export.update_xaxes(tickfont=dict(size=export_font_size), title_font=dict(size=export_font_size))
+            fig_export.update_yaxes(tickfont=dict(size=export_font_size), title_font=dict(size=export_font_size))
+
+            # Annotation fonts (e.g., zodiac labels in images mode)
+            if fig_export.layout.annotations:
+                for ann in fig_export.layout.annotations:
+                    if getattr(ann, "font", None) is None:
+                        ann.font = dict(size=export_font_size)
+                    else:
+                        ann.font.size = export_font_size
+
+            # Generate PNG using export settings
+            png_data = fig_export.to_image(
+                format="png",
+                width=int(export_width),
+                height=int(export_height),
+                scale=export_scale
+            )
+            st.download_button(
+                label="📥 Download Plot as PNG",
+                data=png_data,
+                file_name=f"planetary_positions_{selected_datetime.strftime('%Y%m%d_%H%M%S')}.png",
+                mime="image/png",
+                key="download_plot"
+            )
+        except Exception as e:
+            st.warning(f"PNG download unavailable: {str(e)}", icon="⚠️")
         
         # Display planet images if using images mode
         if use_planet_images:
