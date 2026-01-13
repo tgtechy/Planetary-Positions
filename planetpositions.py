@@ -673,7 +673,7 @@ def main():
                         y=y_all,
                         fill='toself',
                         fillcolor=colors[i],
-                        line=dict(color='rgba(150, 150, 150, 0.5)', width=1),
+                        line=dict(color='black', width=2),
                         hoverinfo='skip',
                         showlegend=False,
                         mode='lines'
@@ -766,7 +766,7 @@ def main():
                 )
             
             # Update layout for Cartesian plot
-            max_extent_layout = arc_radius * 1.6
+            max_extent_layout = arc_radius * 1.45
             fig.update_layout(
                 template='plotly_dark',  # Dark theme
                 xaxis=dict(
@@ -802,7 +802,7 @@ def main():
                 paper_bgcolor="black",
                 plot_bgcolor="black",
                 font=dict(color="white"),
-                margin=dict(l=20, r=20, b=40, t=40),
+                margin=dict(l=10, r=10, b=30, t=30),
                 images=layout_images,
                 showlegend=not show_perimeter,  # Hide legend when projecting to perimeter
                 hovermode='closest',
@@ -873,7 +873,7 @@ def main():
                         theta=all_angles,
                         fill='toself',
                         fillcolor=colors[i],
-                        line=dict(color='rgba(150, 150, 150, 0.5)', width=1),
+                        line=dict(color='black', width=2),
                         hoverinfo='skip',
                         showlegend=False,
                         name=''
@@ -999,7 +999,7 @@ def main():
                         theta=all_angles,
                         fill='toself',
                         fillcolor=colors[i],
-                        line=dict(color='rgba(150, 150, 150, 0.5)', width=1),
+                        line=dict(color='black', width=2),
                         hoverinfo='skip',
                         showlegend=False,
                         name=''
