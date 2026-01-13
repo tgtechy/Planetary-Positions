@@ -419,16 +419,16 @@ def polar_to_cartesian(r, theta_deg):
     return x, y
 
 def main():
-    st.title("🪐 Birthday Planetary Positions")
+    st.title("🪐 Planetary Positions")
     st.markdown("""
-    Select your birthday below to see the heliocentric (Sun-centered) positions of the planets.
+    Select a date belowto see the heliocentric (Sun-centered) positions of the planets.
     The distances are measured in **Astronomical Units (AU)**.""")
 
     # 1. User Input
     col1, col2 = st.columns([1, 3])
     with col1:
         selected_date = st.date_input(
-            "Select Birthday",
+            "Select Date",
             value=datetime.date(2000, 1, 1),
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date(2100, 12, 31)
@@ -447,6 +447,9 @@ def main():
         selected_datetime = datetime.datetime(selected_date.year, selected_date.month, selected_date.day, hour, minute, second)
         
         show_perimeter = st.checkbox("Project to Perimeter (Angular Position Only)", key="show_perimeter")
+        show_orbits = st.checkbox("Show Orbit Lines", value=True, key="show_orbits")
+        show_zodiac_radials = st.checkbox("Show Zodiac Sector Lines", value=False, key="show_zodiac_radials")
+        show_radial_scale = st.checkbox("Show Radial Scale", value=True, key="show_radial_scale")
         
         # Planet visualization mode (mutually exclusive)
         planet_mode = st.radio(
@@ -518,10 +521,10 @@ def main():
     if use_log_radius:
         min_radius = df[df['Planet'] != 'Sun']['r_plot'].min()
         span = max_radius - min_radius if max_radius != min_radius else max_radius or 1
-        arc_radius = max_radius + 0.1 * span
+        arc_radius = max_radius + 0.3 * span
     else:
         # For linear scale, use the maximum orbital radius to position zodiac bands at perimeter
-        arc_radius = max_orbital_radius * 1.05
+        arc_radius = max_orbital_radius * 1.15
 
     # Now apply perimeter projection after calculating arc_radius
     if show_perimeter:
@@ -599,6 +602,7 @@ def main():
                 "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
                 "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
             ]
+            zodiac_glyphs = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
             colors = [
                 'rgba(255, 80, 80, 0.7)', 'rgba(255, 140, 60, 0.7)', 'rgba(255, 200, 50, 0.7)',
                 'rgba(100, 220, 100, 0.7)', 'rgba(80, 200, 200, 0.7)', 'rgba(100, 150, 255, 0.7)',
@@ -663,6 +667,23 @@ def main():
                     )
                 )
             
+            # Add radial lines for zodiac sector boundaries (Cartesian mode)
+            if show_zodiac_radials:
+                for i in range(12):
+                    angle = i * 30  # Zodiac sector boundaries at 0°, 30°, 60°, etc.
+                    x_line = [0, arc_radius * np.cos(np.radians(angle))]
+                    y_line = [0, arc_radius * np.sin(np.radians(angle))]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x_line,
+                            y=y_line,
+                            mode='lines',
+                            line=dict(color='rgba(200, 200, 200, 0.5)', width=1),
+                            hoverinfo='skip',
+                            showlegend=False
+                        )
+                    )
+            
             # Add planets with images
             layout_images = []
             for _, row in df.iterrows():
@@ -715,7 +736,7 @@ def main():
                     )
             
             # Add zodiac sign labels outside the colored bands
-            label_radius = arc_radius * 1.25
+            label_radius = arc_radius * 1.35
             for i, sign in enumerate(zodiac_signs):
                 angle = i * 30 + 15
                 x_label = label_radius * np.cos(np.radians(angle))
@@ -724,7 +745,7 @@ def main():
                 fig.add_annotation(
                     x=x_label,
                     y=y_label,
-                    text=sign,
+                    text=f"{zodiac_glyphs[i]} {sign}",
                     showarrow=False,
                     font=dict(color='white', size=12, family='Arial'),
                     xanchor='center',
@@ -900,7 +921,7 @@ def main():
             # Add each planet individually with a uniform marker size so planets render as colored dots
             for _, row in df.iterrows():
                 # Make Sun smaller than other planets
-                marker_size = 6 if row['Planet'] == 'Sun' else 12
+                marker_size = 14 if row['Planet'] == 'Sun' else 18
                 
                 fig.add_trace(
                     go.Scatterpolar(
@@ -923,6 +944,8 @@ def main():
             "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
             "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
         ]
+        zodiac_glyphs = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
+        zodiac_labels = [f"{zodiac_glyphs[i]} {zodiac_signs[i]}" for i in range(12)]
         
         # Only add polar zodiac arcs for markers mode (not images)
         if not use_glyphs and not use_planet_images:
@@ -970,8 +993,23 @@ def main():
                     )
                 )
         
+        # Add radial lines for zodiac sector boundaries (Polar mode)
+        if show_zodiac_radials and not use_planet_images:
+            for i in range(12):
+                angle = i * 30  # Zodiac sector boundaries at 0°, 30°, 60°, etc.
+                fig.add_trace(
+                    go.Scatterpolar(
+                        r=[0, arc_radius],
+                        theta=[angle, angle],
+                        mode='lines',
+                        line=dict(color='rgba(200, 200, 200, 0.5)', width=1),
+                        hoverinfo='skip',
+                        showlegend=False
+                    )
+                )
+        
         # Add orbital paths for each planet (skip if projecting to perimeter or using images)
-        if not show_perimeter and not use_planet_images:
+        if not show_perimeter and not use_planet_images and show_orbits:
             for planet_name in sorted(PLANETS_DATA.keys()):
                 # Only draw orbits for planets that are in the dataframe
                 if planet_name not in df['Planet'].values:
@@ -1017,8 +1055,8 @@ def main():
 
         # Prepare radial axis config based on scale mode (only for polar plots)
         if not use_planet_images:
-            if show_perimeter:
-                # Hide radial axis when projecting to perimeter
+            if show_perimeter or not show_radial_scale:
+                # Hide radial axis when projecting to perimeter or when radial scale is disabled
                 radialaxis_config = dict(
                     visible=False,
                     showticklabels=False,
@@ -1053,7 +1091,7 @@ def main():
                     angularaxis=dict(
                         showgrid=False,
                         tickvals=[i * 30 + 15 for i in range(12)],
-                        ticktext=zodiac_signs,
+                        ticktext=zodiac_labels,
                         rotation=0,
                         direction='counterclockwise'
                     )
@@ -1170,7 +1208,7 @@ def main():
 
     # Birthday Facts Section
     st.markdown("---")
-    st.subheader("🎂 Birthday Fun ...")
+    st.subheader("🎂 If the date is your birthday ...")
     
     with st.expander("View Birthday Facts & Statistics", expanded=True):
         birthday_facts = calculate_birthday_facts(selected_datetime)
