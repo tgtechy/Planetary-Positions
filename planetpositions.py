@@ -421,7 +421,7 @@ def polar_to_cartesian(r, theta_deg):
 def main():
     st.title("🪐 Planetary Positions")
     st.markdown("""
-    Select a date belowto see the heliocentric (Sun-centered) positions of the planets.
+    Select a date below to see the heliocentric (Sun-centered) positions of the planets.
     The distances are measured in **Astronomical Units (AU)**.""")
 
     # 1. User Input
@@ -464,15 +464,6 @@ def main():
         show_zodiac_radials = st.checkbox("Show Zodiac Sector Lines", value=False, key="show_zodiac_radials")
         show_radial_scale = st.checkbox("Show Radial Scale", value=True, key="show_radial_scale")
         
-        # Planet visualization mode (mutually exclusive)
-        planet_mode = st.radio(
-            "Planet Display Mode",
-            ["Markers", "Glyphs", "Images"],
-            horizontal=True
-        )
-        use_glyphs = (planet_mode == "Glyphs")
-        use_planet_images = (planet_mode == "Images")
-        
         # Disable logarithmic scale when projecting to perimeter
         if show_perimeter:
             # Force off if previously enabled
@@ -491,6 +482,15 @@ def main():
                 value=True,
                 key="use_log_radius",
             )
+        
+        # Planet visualization mode (mutually exclusive)
+        planet_mode = st.radio(
+            "Planet Display Mode",
+            ["Markers", "Glyphs", "Images"],
+            horizontal=True
+        )
+        use_glyphs = (planet_mode == "Glyphs")
+        use_planet_images = (planet_mode == "Images")
         
     # 2. Calculate Data
     with st.spinner("Calculating planetary orbits..."):
@@ -760,7 +760,7 @@ def main():
                     y=y_label,
                     text=f"{zodiac_glyphs[i]} {sign}",
                     showarrow=False,
-                    font=dict(color='white', size=12, family='Arial'),
+                    font=dict(color='white', size=14, family='Arial'),
                     xanchor='center',
                     yanchor='middle'
                 )
@@ -1106,12 +1106,13 @@ def main():
                         tickvals=[i * 30 + 15 for i in range(12)],
                         ticktext=zodiac_labels,
                         rotation=0,
-                        direction='counterclockwise'
+                        direction='counterclockwise',
+                        tickfont=dict(size=14)
                     )
                 ),
                 paper_bgcolor="black",
                 plot_bgcolor="black",
-                font=dict(color="white"),
+                font=dict(color="white", size=14),
                 margin=dict(l=0, r=0, b=80, t=40),
                 legend=dict(font=dict(size=14), yanchor="top", y=0.99, xanchor="right", x=0.99, tracegroupgap=12)
             )
