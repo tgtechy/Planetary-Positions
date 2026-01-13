@@ -427,12 +427,25 @@ def main():
     # 1. User Input
     col1, col2 = st.columns([1, 3])
     with col1:
+        # Initialize default date value
+        if "selected_date_value" not in st.session_state:
+            st.session_state.selected_date_value = datetime.date(2000, 1, 1)
+        
         selected_date = st.date_input(
             "Select Date",
-            value=datetime.date(2000, 1, 1),
+            value=st.session_state.selected_date_value,
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date(2100, 12, 31)
         )
+        
+        # Update session state when date changes
+        if selected_date != st.session_state.selected_date_value:
+            st.session_state.selected_date_value = selected_date
+        
+        # Today button
+        if st.button("Today", use_container_width=True):
+            st.session_state.selected_date_value = datetime.date.today()
+            st.rerun()
         
         # Time input
         st.subheader("Time")
