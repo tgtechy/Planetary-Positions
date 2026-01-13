@@ -4,20 +4,18 @@ An interactive Streamlit web application for visualizing planetary positions in 
 
 ## Overview
 
-This application calculates and displays the heliocentric (Sun-centered) positions of planets using Keplerian orbital elements. It provides an interactive polar plot showing the positions of all planets from Mercury to Pluto, along with zodiac sign overlays and customizable visualization options.
+This application calculates and displays the heliocentric (Sun-centered) positions of planets using Keplerian orbital elements. It provides an interactive polar plot showing the positions of all planets from Mercury to Pluto (yes, we consider pluto a proto-planet), along with zodiac sign overlays and customizable visualization options.
 
 ## Features
 
 ### Planetary Visualization
 - **Three Display Modes:**
   - **Markers**: Simple colored dots for each planet
-  - **Glyphs**: Astronomical symbols (☿♀⊕♂♃♄♅♆♇)
-  - **Images**: Actual planet images for realistic visualization
+  - **Glyphs**: Astronomical symbols (☿ ♀ ⊕ ♂ ♃ ♄ ♅ ♆ ♇)
+  - **Images**: Planet images for realistic visualization
 
 ### Date and Time Selection
 - Select any date from 1900 to 2100
-- Precise time input (hour, minute, second)
-- "Today" button for quick access to current date
 
 ### Visualization Options
 - **Logarithmic Radial Scale**: Toggle between linear and logarithmic distance scaling for better visualization of inner planets
