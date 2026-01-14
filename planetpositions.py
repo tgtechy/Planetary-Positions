@@ -422,7 +422,7 @@ def main():
     st.title("🪐 Planetary Positions")
     st.markdown("""
     Select a date below to see the heliocentric (Sun-centered) positions of the planets.
-    The distances are measured in **Astronomical Units (AU)**.""")
+    The distances are measured in [**Astronomical Units (AU)**](https://en.wikipedia.org/wiki/Astronomical_unit).""")
 
     # 1. User Input
     col1, col2 = st.columns([1, 3])
@@ -448,7 +448,7 @@ def main():
             st.rerun()
         
         # Time input
-        st.subheader("Time")
+        st.markdown("**Select Time**")
         time_col1, time_col2, time_col3 = st.columns(3)
         with time_col1:
             hour = st.number_input("Hour", min_value=0, max_value=23, value=12, step=1)
@@ -561,7 +561,7 @@ def main():
                         candidates.append(val)
             candidates = sorted(set(candidates))
             radial_tickvals = [math.log10(v) + log_offset for v in candidates]
-            radial_ticktext = [f"{v:g} AU" for v in candidates]
+            radial_ticktext = [f"{v:g}" for v in candidates]
         else:
             radial_tickvals = []
             radial_ticktext = []
@@ -926,7 +926,14 @@ def main():
                 )
 
             # Make legend glyphs larger for readability (fallback for label text)
-            fig.update_layout(legend=dict(font=dict(size=14), yanchor="top", y=0.99, xanchor="right", x=0.99))
+            fig.update_layout(legend=dict(font=dict(size=14), yanchor="top", y=-0.15, xanchor="left", x=0, orientation="h"))
+            # Add a line above the legend
+            fig.add_shape(
+                type="line",
+                xref="paper", yref="paper",
+                x0=0, y0=-0.05, x1=1, y1=-0.05,
+                line=dict(color="rgba(200, 200, 200, 0.5)", width=1)
+            )
         else:
             # Create figure with uniform marker sizes for simple colored dots
             fig = go.Figure()
@@ -1114,7 +1121,41 @@ def main():
                 plot_bgcolor="black",
                 font=dict(color="white", size=14),
                 margin=dict(l=0, r=0, b=80, t=40),
-                legend=dict(font=dict(size=14), yanchor="top", y=0.99, xanchor="right", x=0.99, tracegroupgap=12)
+                legend=dict(font=dict(size=14), yanchor="top", y=-0.15, xanchor="left", x=0, orientation="h", tracegroupgap=12)
+            )
+            # Add a line above the legend
+            fig.add_shape(
+                type="line",
+                xref="paper", yref="paper",
+                x0=0, y0=-0.15, x1=1, y1=-0.15,
+                line=dict(color="rgba(200, 200, 200, 0.5)", width=1)
+            )
+
+        # Add date annotation to lower right corner
+        date_text = selected_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        if use_planet_images:
+            # For Cartesian plots, add annotation with xref/yref to data coordinates
+            fig.add_annotation(
+                x=max_extent_layout * 0.95,
+                y=-max_extent_layout * 0.95,
+                text=date_text,
+                showarrow=False,
+                font=dict(color='white', size=12, family='Arial'),
+                xanchor='right',
+                yanchor='top'
+            )
+        else:
+            # For polar plots, add annotation with xref/yref to paper coordinates
+            fig.add_annotation(
+                xref='paper',
+                yref='paper',
+                x=0.98,
+                y=0.02,
+                text=date_text,
+                showarrow=False,
+                font=dict(color='white', size=12),
+                xanchor='right',
+                yanchor='bottom'
             )
 
         # Use theme=None when using planet images to prevent Streamlit from overriding Plotly's dark theme
@@ -1125,86 +1166,87 @@ def main():
         
         # Export controls and download button for high-resolution PNG
         # These settings only affect the downloaded image, not the on-screen plot
-        exp_col1, exp_col2, exp_col3 = st.columns(3)
-        with exp_col1:
-            export_scale = st.slider("PNG export scale", min_value=1, max_value=4, value=3, help="Higher scale increases resolution.")
-            export_font_size = st.slider("PNG export font size", min_value=12, max_value=36, value=20, help="Larger values make text more readable in the PNG.")
-        with exp_col2:
-            export_width = st.number_input("PNG export width (px)", min_value=800, max_value=4000, value=1400, step=100, help="Width of the exported PNG.")
-            export_height = st.number_input("PNG export height (px)", min_value=600, max_value=3000, value=1000, step=100, help="Height of the exported PNG.")
-        with exp_col3:
-            export_bg = st.selectbox(
-                "PNG background",
-                ["Match app (black)", "Transparent", "White"],
-                index=0,
-                help="Choose background for the exported image."
-            )
-
-        try:
-            # Create an export-only copy of the figure and enlarge fonts
-            fig_export = go.Figure(fig)
-
-            # Apply background choice to export only
-            if export_bg == "Transparent":
-                bg_color = "rgba(0,0,0,0)"
-            elif export_bg == "White":
-                bg_color = "white"
-            else:
-                bg_color = "black"
-
-            fig_export.update_layout(
-                paper_bgcolor=bg_color,
-                plot_bgcolor=bg_color,
-            )
-            if getattr(fig_export.layout, "polar", None):
-                fig_export.update_layout(polar=dict(bgcolor=bg_color))
-
-            # Base font and legend
-            fig_export.update_layout(font=dict(size=export_font_size))
-            fig_export.update_layout(legend=dict(font=dict(size=export_font_size)))
-
-            # Title font (if present)
-            if fig_export.layout.title and fig_export.layout.title.font:
-                current = fig_export.layout.title.font.size or 0
-                fig_export.layout.title.font.size = max(current, export_font_size)
-
-            # Polar axis tick fonts (if polar is used)
-            if getattr(fig_export.layout, "polar", None):
-                fig_export.update_layout(
-                    polar=dict(
-                        angularaxis=dict(tickfont=dict(size=export_font_size)),
-                        radialaxis=dict(tickfont=dict(size=export_font_size))
-                    )
+        with st.expander("📥 PNG Export Settings", expanded=False):
+            exp_col1, exp_col2, exp_col3 = st.columns(3)
+            with exp_col1:
+                export_scale = st.slider("PNG export scale", min_value=1, max_value=4, value=3, help="Higher scale increases resolution.")
+                export_font_size = st.slider("PNG export font size", min_value=12, max_value=36, value=20, help="Larger values make text more readable in the PNG.")
+            with exp_col2:
+                export_width = st.number_input("PNG export width (px)", min_value=800, max_value=4000, value=1400, step=100, help="Width of the exported PNG.")
+                export_height = st.number_input("PNG export height (px)", min_value=600, max_value=3000, value=1000, step=100, help="Height of the exported PNG.")
+            with exp_col3:
+                export_bg = st.selectbox(
+                    "PNG background",
+                    ["Match app (black)", "Transparent", "White"],
+                    index=0,
+                    help="Choose background for the exported image."
                 )
 
-            # Cartesian axes fonts (safe even if axes are hidden)
-            fig_export.update_xaxes(tickfont=dict(size=export_font_size), title_font=dict(size=export_font_size))
-            fig_export.update_yaxes(tickfont=dict(size=export_font_size), title_font=dict(size=export_font_size))
+            try:
+                # Create an export-only copy of the figure and enlarge fonts
+                fig_export = go.Figure(fig)
 
-            # Annotation fonts (e.g., zodiac labels in images mode)
-            if fig_export.layout.annotations:
-                for ann in fig_export.layout.annotations:
-                    if getattr(ann, "font", None) is None:
-                        ann.font = dict(size=export_font_size)
-                    else:
-                        ann.font.size = export_font_size
+                # Apply background choice to export only
+                if export_bg == "Transparent":
+                    bg_color = "rgba(0,0,0,0)"
+                elif export_bg == "White":
+                    bg_color = "white"
+                else:
+                    bg_color = "black"
 
-            # Generate PNG using export settings
-            png_data = fig_export.to_image(
-                format="png",
-                width=int(export_width),
-                height=int(export_height),
-                scale=export_scale
-            )
-            st.download_button(
-                label="📥 Download Plot as PNG",
-                data=png_data,
-                file_name=f"planetary_positions_{selected_datetime.strftime('%Y%m%d_%H%M%S')}.png",
-                mime="image/png",
-                key="download_plot"
-            )
-        except Exception as e:
-            st.warning(f"PNG download unavailable: {str(e)}", icon="⚠️")
+                fig_export.update_layout(
+                    paper_bgcolor=bg_color,
+                    plot_bgcolor=bg_color,
+                )
+                if getattr(fig_export.layout, "polar", None):
+                    fig_export.update_layout(polar=dict(bgcolor=bg_color))
+
+                # Base font and legend
+                fig_export.update_layout(font=dict(size=export_font_size))
+                fig_export.update_layout(legend=dict(font=dict(size=export_font_size)))
+
+                # Title font (if present)
+                if fig_export.layout.title and fig_export.layout.title.font:
+                    current = fig_export.layout.title.font.size or 0
+                    fig_export.layout.title.font.size = max(current, export_font_size)
+
+                # Polar axis tick fonts (if polar is used)
+                if getattr(fig_export.layout, "polar", None):
+                    fig_export.update_layout(
+                        polar=dict(
+                            angularaxis=dict(tickfont=dict(size=export_font_size)),
+                            radialaxis=dict(tickfont=dict(size=export_font_size))
+                        )
+                    )
+
+                # Cartesian axes fonts (safe even if axes are hidden)
+                fig_export.update_xaxes(tickfont=dict(size=export_font_size), title_font=dict(size=export_font_size))
+                fig_export.update_yaxes(tickfont=dict(size=export_font_size), title_font=dict(size=export_font_size))
+
+                # Annotation fonts (e.g., zodiac labels in images mode)
+                if fig_export.layout.annotations:
+                    for ann in fig_export.layout.annotations:
+                        if getattr(ann, "font", None) is None:
+                            ann.font = dict(size=export_font_size)
+                        else:
+                            ann.font.size = export_font_size
+
+                # Generate PNG using export settings
+                png_data = fig_export.to_image(
+                    format="png",
+                    width=int(export_width),
+                    height=int(export_height),
+                    scale=export_scale
+                )
+                st.download_button(
+                    label="📥 Download Plot as PNG",
+                    data=png_data,
+                    file_name=f"planetary_positions_{selected_datetime.strftime('%Y%m%d_%H%M%S')}.png",
+                    mime="image/png",
+                    key="download_plot"
+                )
+            except Exception as e:
+                st.warning(f"PNG download unavailable: {str(e)}", icon="⚠️")
         
         # Display planet images if using images mode
         if use_planet_images:
@@ -1222,13 +1264,15 @@ def main():
 
     # Birthday Facts Section
     st.markdown("---")
-    st.subheader("🎂 If the date is your birthday ...")
+    st.subheader(f"🎂 If {selected_datetime.strftime('%Y/%m/%d %H:%M:%S')} is your birthday...")
     
-    with st.expander("View Birthday Facts & Statistics", expanded=True):
+    with st.expander("View Birthday Facts & Statistics", expanded=False):
         birthday_facts = calculate_birthday_facts(selected_datetime)
         
-        # Create table from facts
+        # Create table from facts with date at the top
         facts_df = pd.DataFrame(list(birthday_facts.items()), columns=['Fact', 'Value'])
+        date_row = pd.DataFrame([{'Fact': 'Date', 'Value': selected_datetime.strftime('%Y/%m/%d %H:%M:%S')}])
+        facts_df = pd.concat([date_row, facts_df], ignore_index=True)
         st.dataframe(facts_df, use_container_width=True, hide_index=True)
         
         # Additional notes
@@ -1241,10 +1285,6 @@ def main():
         - **Julian Day Number**: Used by astronomers for precise date calculations
         - **Birthday Paradox**: Probability that someone in a random group of 23 shares your birthday
         """)
-
-    # Display Data Table (Optional)
-    with st.expander("View Raw Coordinates (AU)"):
-        st.dataframe(df[['Planet', 'x', 'y', 'z']])
 
 if __name__ == "__main__":
     main()
