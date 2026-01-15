@@ -605,7 +605,7 @@ def main():
         'Pluto': 'P'
     }
 
-    # Planet traditional colors
+    # Planet colors
     planet_colors = {
         'Sun': 'gold',
         'Mercury': 'gray',
@@ -619,7 +619,7 @@ def main():
         'Pluto': '#B0B0B0'
     }
 
-    # 3. Visualization
+    # Visualization
     with col2:
         # Create Polar Scatter Plot
         if use_planet_images:
