@@ -1227,13 +1227,13 @@ def main():
                 plot_bgcolor="black",
                 font=dict(color="white", size=14),
                 margin=dict(l=0, r=0, b=80, t=40),
-                legend=dict(font=dict(size=14), yanchor="top", y=-0.15, xanchor="left", x=0, orientation="h", tracegroupgap=12)
+                legend=dict(font=dict(size=14), yanchor="top", y=-0.30, xanchor="left", x=0, orientation="h", tracegroupgap=12)
             )
             # Add a line above the legend
             fig.add_shape(
                 type="line",
                 xref="paper", yref="paper",
-                x0=0, y0=-0.15, x1=1, y1=-0.15,
+                x0=0, y0=-0.25, x1=1, y1=-0.25,
                 line=dict(color="rgba(200, 200, 200, 0.5)", width=1)
             )
 
@@ -1242,7 +1242,7 @@ def main():
         if use_planet_images:
             # For Cartesian plots, add annotation with xref/yref to data coordinates
             fig.add_annotation(
-                x=max_extent_layout * 1.4,
+                x=max_extent_layout * 1.45,
                 y=-max_extent_layout * 0.95,
                 text=date_text,
                 showarrow=False,
@@ -1256,7 +1256,7 @@ def main():
                 xref='paper',
                 yref='paper',
                 x=0.98,
-                y=-0.08,
+                y=-0.23,
                 text=date_text,
                 showarrow=False,
                 font=dict(color='white', size=12),
