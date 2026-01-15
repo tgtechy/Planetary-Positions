@@ -432,7 +432,7 @@ def main():
             st.session_state.selected_date_value = datetime.date(2000, 1, 1)
         
         selected_date = st.date_input(
-            "Select Date",
+            "Select Date (YYYY/MM/DD)",
             value=st.session_state.selected_date_value,
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date(2100, 12, 31)
