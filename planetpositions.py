@@ -483,13 +483,19 @@ def main():
                 key="use_log_radius",
             )
         
+        # Initialize planet mode in session state
+        if "planet_mode" not in st.session_state:
+            st.session_state.planet_mode = "Markers"
+        
         # Planet visualization mode (mutually exclusive)
         planet_mode = st.radio(
             "Planet Display Mode",
-            ["Markers", "Glyphs", "Images"],
-            horizontal=True
+            ["Markers", "Glyphs", "Letters", "Images"],
+            horizontal=True,
+            key="planet_mode"
         )
         use_glyphs = (planet_mode == "Glyphs")
+        use_letters = (planet_mode == "Letters")
         use_planet_images = (planet_mode == "Images")
         
     # 2. Calculate Data
@@ -583,6 +589,20 @@ def main():
         'Uranus': '♅',
         'Neptune': '♆',
         'Pluto': '♇'
+    }
+
+    # Planet letters (single-letter abbreviations)
+    planet_letters = {
+        'Sun': '*',
+        'Mercury': 'M',
+        'Venus': 'V',
+        'Earth': 'E',
+        'Mars': 'R',
+        'Jupiter': 'J',
+        'Saturn': 'S',
+        'Uranus': 'U',
+        'Neptune': 'N',
+        'Pluto': 'P'
     }
 
     # Planet traditional colors
@@ -804,7 +824,7 @@ def main():
                 font=dict(color="white"),
                 margin=dict(l=10, r=10, b=30, t=30),
                 images=layout_images,
-                showlegend=not show_perimeter,  # Hide legend when projecting to perimeter
+                showlegend=False,  # Always hide legend in Images mode
                 hovermode='closest',
                 dragmode=False
             )
@@ -925,15 +945,101 @@ def main():
                     )
                 )
 
-            # Make legend glyphs larger for readability (fallback for label text)
-            fig.update_layout(legend=dict(font=dict(size=14), yanchor="top", y=-0.15, xanchor="left", x=0, orientation="h"))
-            # Add a line above the legend
-            fig.add_shape(
-                type="line",
-                xref="paper", yref="paper",
-                x0=0, y0=-0.05, x1=1, y1=-0.05,
-                line=dict(color="rgba(200, 200, 200, 0.5)", width=1)
-            )
+        elif use_letters:
+            # Add text labels for planet letters
+            fig = go.Figure()
+            
+            # Add zodiac arcs first (background)
+            zodiac_signs = [
+                "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+            ]
+            colors = [
+                'rgba(255, 80, 80, 0.7)', 'rgba(255, 140, 60, 0.7)', 'rgba(255, 200, 50, 0.7)',
+                'rgba(100, 220, 100, 0.7)', 'rgba(80, 200, 200, 0.7)', 'rgba(100, 150, 255, 0.7)',
+                'rgba(180, 100, 220, 0.7)', 'rgba(220, 100, 180, 0.7)', 'rgba(255, 120, 100, 0.7)',
+                'rgba(255, 180, 80, 0.7)', 'rgba(150, 220, 150, 0.7)', 'rgba(120, 180, 255, 0.7)'
+            ]
+            
+            # Create uniform-width zodiac arcs with inner and outer boundaries
+            arc_width = max_radius * 0.08 if max_radius > 0 else 0.5
+            arc_inner = arc_radius - arc_width
+            
+            for i in range(12):
+                angle_start = i * 30
+                angle_end = (i + 1) * 30
+                
+                # Create arc as a filled region between inner and outer radius
+                num_points = 20
+                # Outer arc
+                angles_outer = [angle_start + (angle_end - angle_start) * j / (num_points - 1) for j in range(num_points)]
+                radii_outer = [arc_radius] * num_points
+                # Inner arc (reversed for proper fill)
+                angles_inner = angles_outer[::-1]
+                radii_inner = [arc_inner] * num_points
+                
+                # Combine outer and inner for closed shape
+                all_angles = angles_outer + angles_inner
+                all_radii = radii_outer + radii_inner
+                
+                fig.add_trace(
+                    go.Scatterpolar(
+                        r=all_radii,
+                        theta=all_angles,
+                        fill='toself',
+                        fillcolor=colors[i],
+                        line=dict(color='black', width=2),
+                        hoverinfo='skip',
+                        showlegend=False,
+                        name=''
+                    )
+                )
+            
+            # Add planets as text letters
+            color_map = {planet: planet_colors.get(planet, 'gray') for planet in df['Planet'].unique()}
+            
+            for _, row in df.iterrows():
+                # Make Sun smaller than other planets
+                text_size = 14 if row['Planet'] == 'Sun' else 20
+                letter_symbol = planet_letters.get(row['Planet'], '●')
+                fig.add_trace(
+                    go.Scatterpolar(
+                        r=[row['r_plot']],
+                        theta=[row['theta']],
+                        mode='text',
+                        text=[letter_symbol],
+                        textposition='middle center',
+                        textfont=dict(size=text_size, color=color_map[row['Planet']], family='Arial, sans-serif', weight='bold'),
+                        meta=[row['Planet'], row['r_linear']],
+                        hovertemplate='<b>%{meta[0]}</b><br>r: %{meta[1]:.3f} AU<extra></extra>',
+                        showlegend=False,
+                        name=f"{letter_symbol} - {row['Planet']}",
+                        legendgroup=row['Planet']
+                    )
+                )
+
+            # Legend-only traces to display letter + planet
+            # Use classical planetary order
+            planet_order = ['Sun', 'Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']
+            legend_planets = [p for p in planet_order if p in df['Planet'].values]
+            for planet_name in legend_planets:
+                letter_symbol = planet_letters.get(planet_name, '●')
+                letter_color = planet_colors.get(planet_name, 'white')
+                fig.add_trace(
+                    go.Scatterpolar(
+                        r=[None],
+                        theta=[None],
+                        mode='markers',
+                        marker=dict(size=0, color='rgba(0,0,0,0)'),
+                        showlegend=True,
+                        # Color the letter text via HTML span to match plot colors
+                        name=f"<span style='color:{letter_color}'>{letter_symbol}</span> - {planet_name}",
+                        legendgroup=planet_name,
+                        hoverinfo='skip',
+                        visible=True
+                    )
+                )
+
         else:
             # Create figure with uniform marker sizes for simple colored dots
             fig = go.Figure()
@@ -967,8 +1073,8 @@ def main():
         zodiac_glyphs = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
         zodiac_labels = [f"{zodiac_glyphs[i]} {zodiac_signs[i]}" for i in range(12)]
         
-        # Only add polar zodiac arcs for markers mode (not images)
-        if not use_glyphs and not use_planet_images:
+        # Only add polar zodiac arcs for markers mode (not images, glyphs, or letters)
+        if not use_glyphs and not use_letters and not use_planet_images:
             # Use the shared arc radius to keep visuals aligned with glyph mode
             # Add zodiac sign arc regions and boundary lines with vibrant colors
             colors = [
@@ -1136,13 +1242,13 @@ def main():
         if use_planet_images:
             # For Cartesian plots, add annotation with xref/yref to data coordinates
             fig.add_annotation(
-                x=max_extent_layout * 0.95,
+                x=max_extent_layout * 1.4,
                 y=-max_extent_layout * 0.95,
                 text=date_text,
                 showarrow=False,
                 font=dict(color='white', size=12, family='Arial'),
                 xanchor='right',
-                yanchor='top'
+                yanchor='bottom'
             )
         else:
             # For polar plots, add annotation with xref/yref to paper coordinates
@@ -1150,7 +1256,7 @@ def main():
                 xref='paper',
                 yref='paper',
                 x=0.98,
-                y=0.02,
+                y=-0.08,
                 text=date_text,
                 showarrow=False,
                 font=dict(color='white', size=12),
