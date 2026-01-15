@@ -6,6 +6,8 @@ import datetime
 import math
 import numpy as np
 
+# author - tgtechy
+
 # Page configuration
 st.set_page_config(page_title="Solar System Plotter", layout="wide")
 
