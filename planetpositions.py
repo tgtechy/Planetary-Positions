@@ -445,7 +445,7 @@ def main():
             st.session_state.selected_date_value = selected_date
         
         # Today button
-        if st.button("Today", use_container_width=True):
+        if st.button("Today", width='stretch'):
             st.session_state.selected_date_value = datetime.date.today()
             st.rerun()
         
@@ -1268,9 +1268,9 @@ def main():
 
         # Use theme=None when using planet images to prevent Streamlit from overriding Plotly's dark theme
         if use_planet_images:
-            st.plotly_chart(fig, use_container_width=True, theme=None)
+            st.plotly_chart(fig, width='stretch', theme=None)
         else:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         
         # Export controls and download button for high-resolution PNG
         # These settings only affect the downloaded image, not the on-screen plot
@@ -1381,7 +1381,7 @@ def main():
         facts_df = pd.DataFrame(list(birthday_facts.items()), columns=['Fact', 'Value'])
         date_row = pd.DataFrame([{'Fact': 'Date', 'Value': selected_datetime.strftime('%Y/%m/%d %H:%M:%S')}])
         facts_df = pd.concat([date_row, facts_df], ignore_index=True)
-        st.dataframe(facts_df, use_container_width=True, hide_index=True)
+        st.dataframe(facts_df, width='stretch', hide_index=True)
         
         # Additional notes
         st.markdown("""
